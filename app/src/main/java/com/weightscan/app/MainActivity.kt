@@ -252,52 +252,35 @@ fun ScannerScreen(
         barcode = value
 
         coroutineScope.launch {
-            // дальше твой существующий код
 
-        barcode = value
-
-        coroutineScope.launch {
-
-            val product =
-                repository.findProduct(value)
+            val product = repository.findProduct(value)
 
             if (product == null) {
-
                 result = null
                 error = "Товар не найден"
-
                 return@launch
             }
 
-            val scanResult =
-                BarcodeParser.parse(
-                    barcode = value,
-                    product = product
-                )
+            val scanResult = BarcodeParser.parse(
+                barcode = value,
+                product = product
+            )
 
             if (scanResult != null) {
-
                 result = scanResult
                 error = null
 
-                lastScannedWeight =
-                    scanResult.weightKg
+                lastScannedWeight = scanResult.weightKg
 
-                val weightGrams =
-                    (scanResult.weightKg * 1000)
-                        .roundToLong()
+                val weightGrams = (scanResult.weightKg * 1000).roundToLong()
 
                 totalWeightGrams += weightGrams
                 scanCount++
-
                 scanHistoryGrams.add(weightGrams)
-
                 successScanId++
-
                 scanFeedback.success()
 
             } else {
-
                 result = null
                 error = "Некорректный штрихкод"
             }
@@ -454,24 +437,19 @@ fun ScannerScreen(
             }
         }
 
-        result?.let { scanResult ->
+        Spacer(modifier = Modifier.height(16.dp))
 
+        if (scanHistoryGrams.isNotEmpty()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-
-                // СЛЕВА
+                // СЛЕВА (Кнопка отмены)
                 Button(
                     onClick = {
-
                         if (scanHistoryGrams.isNotEmpty()) {
-
                             val lastWeight =
-                                scanHistoryGrams.removeAt(
-                                    scanHistoryGrams.lastIndex
-                                )
-
+                                scanHistoryGrams.removeAt(scanHistoryGrams.lastIndex)
                             totalWeightGrams -= lastWeight
                             scanCount = scanHistoryGrams.size
 
@@ -480,13 +458,11 @@ fun ScannerScreen(
                             error = null
                         }
                     },
-                    enabled = scanHistoryGrams.isNotEmpty(),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("↶ Отменить")
                 }
 
-                // СПРАВА
                 Button(
                     onClick = {
                         totalWeightGrams = 0L
@@ -497,68 +473,37 @@ fun ScannerScreen(
                         barcode = ""
                         error = null
                     },
-                    enabled = scanCount > 0,
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("Сбросить")
                 }
             }
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                elevation =
-                    CardDefaults.cardElevation(
-                        defaultElevation = 4.dp
-                    )
-            ) {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
+        result?.let { scanResult ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(18.dp)
                 ) {
-
-                    Spacer(
-                        modifier =
-                            Modifier.height(4.dp)
-                    )
-
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text =
-                            scanResult.product.name,
+                        text = scanResult.product.name,
                         fontSize = 20.sp,
-                        fontWeight =
-                            FontWeight.Bold
+                        fontWeight = FontWeight.Bold
                     )
-
-                    Spacer(
-                        modifier =
-                            Modifier.height(12.dp)
-                    )
-
-                    Text(
-                        text =
-                            "Индекс склада: " +
-                                    scanResult.product.warehouseIndex
-                    )
-
-                    Text(
-                        text =
-                            "Индекс производителя: " +
-                                    scanResult.product.manufacturerIndex
-                    )
-
-                    Spacer(
-                        modifier =
-                            Modifier.height(8.dp)
-                    )
-
-                    Text(
-                        text = barcode,
-                        fontSize = 13.sp
-                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(text = "Индекс склада: " + scanResult.product.warehouseIndex)
+                    Text(text = "Индекс производителя: " + scanResult.product.manufacturerIndex)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = barcode, fontSize = 13.sp)
                 }
             }
         }
