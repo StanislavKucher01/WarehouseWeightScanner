@@ -1,5 +1,10 @@
 package com.weightscan.app
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.weightscan.app.data.local.AppDatabase
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.weightscan.app.domain.BarcodeRuleLearner
@@ -52,19 +57,65 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WeightScanApp() {
 
+    val context =
+        LocalContext.current
+
+    val repository =
+        remember {
+
+            ProductRepository(
+                AppDatabase
+                    .getDatabase(context)
+                    .productDao()
+            )
+        }
+
     var currentScreen by remember {
         mutableStateOf("scanner")
+    }
+
+    var databaseReady by remember {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(Unit) {
+
+        repository.ensureDefaultProduct()
+
+        databaseReady = true
+    }
+
+    if (!databaseReady) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement =
+                Arrangement.Center
+        ) {
+
+            Text(
+                text = "Загрузка..."
+            )
+        }
+
+        return
     }
 
     when (currentScreen) {
 
         "scanner" -> ScannerScreen(
+            repository = repository,
+
             onAddProductClick = {
                 currentScreen = "addProduct"
             }
         )
 
         "addProduct" -> AddProductScreen(
+            repository = repository,
+
             onBackClick = {
                 currentScreen = "scanner"
             }
@@ -74,6 +125,7 @@ fun WeightScanApp() {
 
 @Composable
 fun ScannerScreen(
+    repository: ProductRepository,
     onAddProductClick: () -> Unit
 ) {
 
@@ -87,6 +139,21 @@ fun ScannerScreen(
 
     var error by remember {
         mutableStateOf<String?>(null)
+    }
+
+    val coroutineScope =
+        rememberCoroutineScope()
+
+    var productCount by remember {
+        mutableStateOf(0)
+    }
+
+    LaunchedEffect(Unit) {
+
+        productCount =
+            repository
+                .getAllProducts()
+                .size
     }
 
     Column(
@@ -105,7 +172,7 @@ fun ScannerScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Товаров в базе: ${ProductRepository.getAllProducts().size}"
+            text = "Товаров в базе: $productCount"
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -136,29 +203,40 @@ fun ScannerScreen(
         Button(
             onClick = {
 
-                val product =
-                    ProductRepository.findProduct(barcode)
+                coroutineScope.launch {
 
-                if (product == null) {
-
-                    result = null
-                    error = "Товар не найден в базе"
-
-                } else {
-
-                    val scanResult =
-                        BarcodeParser.parse(
-                            barcode = barcode,
-                            product = product
+                    val product =
+                        repository.findProduct(
+                            barcode
                         )
 
-                    if (scanResult != null) {
-                        result = scanResult
-                        error = null
-                    } else {
+                    if (product == null) {
+
                         result = null
+
                         error =
-                            "Штрихкод повреждён или имеет неправильный формат"
+                            "Товар не найден в базе"
+
+                    } else {
+
+                        val scanResult =
+                            BarcodeParser.parse(
+                                barcode = barcode,
+                                product = product
+                            )
+
+                        if (scanResult != null) {
+
+                            result = scanResult
+                            error = null
+
+                        } else {
+
+                            result = null
+
+                            error =
+                                "Штрихкод повреждён или имеет неправильный формат"
+                        }
                     }
                 }
             },
@@ -224,8 +302,11 @@ fun ScannerScreen(
 }
 @Composable
 fun AddProductScreen(
+    repository: ProductRepository,
     onBackClick: () -> Unit
 ) {
+    val coroutineScope =
+        rememberCoroutineScope()
 
     var name by remember {
         mutableStateOf("")
@@ -540,51 +621,52 @@ fun AddProductScreen(
             Button(
                 onClick = {
 
-                    val alreadyExists =
-                        ProductRepository
-                            .getAllProducts()
-                            .any {
-                                it.barcodePrefix ==
-                                        rule.prefix
-                            }
+                    coroutineScope.launch {
 
-                    if (alreadyExists) {
+                        val alreadyExists =
+                            repository.prefixExists(
+                                rule.prefix
+                            )
 
-                        message =
-                            "Товар с таким префиксом уже существует"
+                        if (alreadyExists) {
 
-                        return@Button
+                            message =
+                                "Товар с таким префиксом уже существует"
+
+                        } else {
+
+                            val product =
+                                Product(
+                                    name =
+                                        name.trim(),
+
+                                    warehouseIndex =
+                                        warehouseIndex.trim(),
+
+                                    manufacturerIndex =
+                                        manufacturerIndex.trim(),
+
+                                    barcodePrefix =
+                                        rule.prefix,
+
+                                    weightStart =
+                                        rule.weightStart,
+
+                                    weightLength =
+                                        rule.weightLength,
+
+                                    weightDivisor =
+                                        rule.weightDivisor
+                                )
+
+                            repository.addProduct(
+                                product
+                            )
+
+                            message =
+                                "Товар сохранён ✓ Теперь нажми «Назад» и проверь его."
+                        }
                     }
-
-                    val product =
-                        Product(
-                            name = name.trim(),
-
-                            warehouseIndex =
-                                warehouseIndex.trim(),
-
-                            manufacturerIndex =
-                                manufacturerIndex.trim(),
-
-                            barcodePrefix =
-                                rule.prefix,
-
-                            weightStart =
-                                rule.weightStart,
-
-                            weightLength =
-                                rule.weightLength,
-
-                            weightDivisor =
-                                rule.weightDivisor
-                        )
-
-                    ProductRepository.addProduct(
-                        product
-                    )
-
-                    message =
-                        "Товар сохранён ✓ Теперь нажми «Назад» и проверь его."
                 },
 
                 modifier = Modifier.fillMaxWidth()
