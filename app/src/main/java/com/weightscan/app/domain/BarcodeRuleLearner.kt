@@ -113,23 +113,31 @@ object BarcodeRuleLearner {
                         continue
                     }
 
+                    val partsBeforeWeight =
+                        examples.map {
+                            it.barcode.substring(0, start)
+                        }
+
+                    var prefixLength = 0
+
+                    for (i in 0 until start) {
+                        val digit = partsBeforeWeight.first()[i]
+
+                        if (partsBeforeWeight.all { it[i] == digit }) {
+                            prefixLength++
+                        } else {
+                            break
+                        }
+                    }
+
+                    if (prefixLength < 2) {
+                        continue
+                    }
+
                     val prefix =
                         examples.first()
                             .barcode
-                            .substring(0, start)
-
-                    if (prefix.length < 2) {
-                        continue
-                    }
-
-                    val samePrefix =
-                        examples.all {
-                            it.barcode.startsWith(prefix)
-                        }
-
-                    if (!samePrefix) {
-                        continue
-                    }
+                            .substring(0, prefixLength)
 
                     candidates.add(
                         LearnedBarcodeRule(

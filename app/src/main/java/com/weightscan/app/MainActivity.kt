@@ -1,5 +1,18 @@
 package com.weightscan.app
 
+import androidx.compose.ui.res.stringResource
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import android.content.Context
+import android.content.Intent
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Divider
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.foundation.layout.Row
 import android.os.SystemClock
 import androidx.compose.runtime.mutableLongStateOf
@@ -31,7 +44,7 @@ import com.weightscan.app.domain.LearnedBarcodeRule
 import com.weightscan.app.domain.TrainingExample
 import com.weightscan.app.model.Product
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -60,7 +73,7 @@ import com.weightscan.app.data.ProductRepository
 import com.weightscan.app.domain.BarcodeParser
 import com.weightscan.app.model.ScanResult
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +85,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+
 
 @Composable
 fun WeightScanApp() {
@@ -89,65 +104,48 @@ fun WeightScanApp() {
             )
         }
 
-    var currentScreen by remember {
-        mutableStateOf("scanner")
-    }
-
-    var databaseReady by remember {
-        mutableStateOf(false)
-    }
+    var currentScreen by remember { mutableStateOf("scanner") }
+    var databaseReady by remember { mutableStateOf(false) }
+    val sessionHistory = remember { mutableStateListOf<SavedSession>() }
 
     LaunchedEffect(Unit) {
-
         repository.ensureDefaultProduct()
-
         databaseReady = true
     }
 
     if (!databaseReady) {
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement =
-                Arrangement.Center
-        ) {
-
-            Text(
-                text = "Загрузка..."
-            )
-        }
-
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp), verticalArrangement = Arrangement.Center) {
+            Text(text = stringResource(R.string.loading))        }
         return
     }
 
     when (currentScreen) {
-
         "scanner" -> ScannerScreen(
             repository = repository,
-
-            onAddProductClick = {
-                currentScreen = "addProduct"
+            onAddProductClick = { currentScreen = "addProduct" },
+            onOpenProductsClick = { currentScreen = "products" },
+            onOpenHistoryClick = { currentScreen = "history" },
+            // Добавляем : Int и : Long вот сюда:
+            onSaveSession = { records ->
+                sessionHistory.add(0, SavedSession(records = records))
             }
         )
-
-        "addProduct" -> AddProductScreen(
-            repository = repository,
-
-            onBackClick = {
-                currentScreen = "scanner"
-            }
-        )
+        "addProduct" -> AddProductScreen(repository = repository, onBackClick = { currentScreen = "scanner" })
+        "products" -> ProductListScreen(repository = repository, onBackClick = { currentScreen = "scanner" })
+        "history" -> HistoryScreen(sessions = sessionHistory, onBackClick = { currentScreen = "scanner" })
     }
 }
 
-@Composable
-fun ScannerScreen(
-    repository: ProductRepository,
-    onAddProductClick: () -> Unit
-) {
-
+    @Composable
+    fun ScannerScreen(
+        repository: ProductRepository,
+        onAddProductClick: () -> Unit,
+        onOpenProductsClick: () -> Unit,
+        onOpenHistoryClick: () -> Unit,
+        onSaveSession: (List<ScanRecord>) -> Unit
+    ) {
     var barcode by remember {
         mutableStateOf("")
     }
@@ -182,6 +180,9 @@ fun ScannerScreen(
     val context =
         LocalContext.current
 
+        val productNotFoundText = stringResource(R.string.product_not_found)
+        val invalidBarcodeText = stringResource(R.string.invalid_barcode)
+
     val scanFeedback =
         remember {
             ScanFeedback(context)
@@ -195,9 +196,7 @@ fun ScannerScreen(
         mutableStateOf(0)
     }
 
-    val scanHistoryGrams = remember {
-        mutableStateListOf<Long>()
-    }
+        val scanHistoryRecords = remember { mutableStateListOf<ScanRecord>() }
 
     var lastProcessedBarcode by remember {
         mutableStateOf<String?>(null)
@@ -257,7 +256,7 @@ fun ScannerScreen(
 
             if (product == null) {
                 result = null
-                error = "Товар не найден"
+                error = productNotFoundText
                 return@launch
             }
 
@@ -276,42 +275,50 @@ fun ScannerScreen(
 
                 totalWeightGrams += weightGrams
                 scanCount++
-                scanHistoryGrams.add(weightGrams)
+
+                // Сохраняем подробную запись о товаре
+                scanHistoryRecords.add(
+                    ScanRecord(
+                        productName = scanResult.product.name,
+                        warehouseIndex = scanResult.product.warehouseIndex,
+                        manufacturerIndex = scanResult.product.manufacturerIndex,
+                        weightGrams = weightGrams
+                    )
+                )
                 successScanId++
                 scanFeedback.success()
-
-            } else {
+            }else {
                 result = null
-                error = "Некорректный штрихкод"
+                error = invalidBarcodeText
             }
         }
     }
 
-    fun undoLastScans(count: Int) {
+        fun undoLastScans(count: Int) {
 
-        val countToRemove =
-            minOf(count, scanHistoryGrams.size)
+            val countToRemove =
+                minOf(count, scanHistoryRecords.size)
 
-        repeat(countToRemove) {
+            repeat(countToRemove) {
 
-            val lastWeight =
-                scanHistoryGrams.removeAt(
-                    scanHistoryGrams.lastIndex
-                )
+                val lastRecord =
+                    scanHistoryRecords.removeAt(
+                        scanHistoryRecords.lastIndex
+                    )
 
-            totalWeightGrams -= lastWeight
+                totalWeightGrams -= lastRecord.weightGrams
+            }
+
+            scanCount = scanHistoryRecords.size
+
+            if (totalWeightGrams < 0) {
+                totalWeightGrams = 0
+            }
+
+            result = null
+            barcode = ""
+            error = null
         }
-
-        scanCount = scanHistoryGrams.size
-
-        if (totalWeightGrams < 0) {
-            totalWeightGrams = 0
-        }
-
-        result = null
-        barcode = ""
-        error = null
-    }
 
     Column(
         modifier = Modifier
@@ -327,21 +334,7 @@ fun ScannerScreen(
         verticalArrangement =
             Arrangement.Top
     ) {
-
-        Text(
-            text = "WeightScan",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "Товаров в базе: $productCount",
-            fontSize = 14.sp
-        )
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
+        LanguageSelector()
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -417,29 +410,54 @@ fun ScannerScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) {
-
-            Column(
-                modifier = Modifier.padding(12.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.current_session),
+                        fontSize = 13.sp
+                    )
 
-                Text(
-                    text = "Текущая сессия",
-                    fontSize = 13.sp
-                )
+                    Text(
+                        text = stringResource(
+                            R.string.session_summary,
+                            scanCount,
+                            totalWeightGrams / 1000.0
+                        ))
+                }
 
-                Text(
-                    text = "$scanCount шт. | %.3f кг".format(
-                        totalWeightGrams / 1000.0
-                    ),
-                    fontSize = 25.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (scanCount > 0) {
+                    IconButton(
+                        onClick = {
+                            onSaveSession(scanHistoryRecords.toList())
+
+                            totalWeightGrams = 0L
+                            scanCount = 0
+                            scanHistoryRecords.clear()
+                            result = null
+                            barcode = ""
+                            error = null
+                        }
+                    ) {
+                        Text(
+                            text = "✓",
+                            color = Color(0xFF2E7D32),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (scanHistoryGrams.isNotEmpty()) {
+        if (scanHistoryRecords.isNotEmpty()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -447,27 +465,32 @@ fun ScannerScreen(
                 // СЛЕВА (Кнопка отмены)
                 Button(
                     onClick = {
-                        if (scanHistoryGrams.isNotEmpty()) {
-                            val lastWeight =
-                                scanHistoryGrams.removeAt(scanHistoryGrams.lastIndex)
-                            totalWeightGrams -= lastWeight
-                            scanCount = scanHistoryGrams.size
+                        if (scanHistoryRecords.isNotEmpty()) {
+
+                            val lastRecord =
+                                scanHistoryRecords.removeAt(
+                                    scanHistoryRecords.lastIndex
+                                )
+
+                            totalWeightGrams -= lastRecord.weightGrams
+                            scanCount = scanHistoryRecords.size
 
                             result = null
                             barcode = ""
                             error = null
                         }
                     },
+                    enabled = scanHistoryRecords.isNotEmpty(),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("↶ Отменить")
+                    Text(stringResource(R.string.undo))
                 }
 
                 Button(
                     onClick = {
                         totalWeightGrams = 0L
                         scanCount = 0
-                        scanHistoryGrams.clear()
+                        scanHistoryRecords.clear()
 
                         result = null
                         barcode = ""
@@ -475,7 +498,7 @@ fun ScannerScreen(
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Сбросить")
+                    Text(stringResource(R.string.reset))
                 }
             }
 
@@ -500,8 +523,19 @@ fun ScannerScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(text = "Индекс склада: " + scanResult.product.warehouseIndex)
-                    Text(text = "Индекс производителя: " + scanResult.product.manufacturerIndex)
+                    Text(
+                        text = stringResource(
+                            R.string.warehouse_index,
+                            scanResult.product.warehouseIndex
+                        )
+                    )
+
+                    Text(
+                        text = stringResource(
+                            R.string.manufacturer_index,
+                            scanResult.product.manufacturerIndex
+                        )
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(text = barcode, fontSize = 13.sp)
                 }
@@ -546,6 +580,31 @@ fun ScannerScreen(
             modifier = Modifier.height(16.dp)
         )
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = onOpenProductsClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+            ) {
+                Text(stringResource(R.string.products))
+            }
+
+            Button(
+                onClick = onOpenHistoryClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+            ) {
+                Text(stringResource(R.string.history))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Button(
             onClick = onAddProductClick,
             modifier = Modifier
@@ -553,7 +612,7 @@ fun ScannerScreen(
                 .height(52.dp)
         ) {
 
-            Text("+ Добавить товар")
+            Text(stringResource(R.string.add_product))
         }
 
         Spacer(
@@ -561,7 +620,7 @@ fun ScannerScreen(
         )
 
         Text(
-            text = "Ручной ввод",
+            text = stringResource(R.string.manual_input),
             fontWeight = FontWeight.Bold
         )
 
@@ -580,7 +639,7 @@ fun ScannerScreen(
             },
 
             label = {
-                Text("Штрихкод")
+                Text(stringResource(R.string.barcode))
             },
 
             keyboardOptions =
@@ -608,7 +667,7 @@ fun ScannerScreen(
                 Modifier.fillMaxWidth()
         ) {
 
-            Text("Проверить вручную")
+            Text(stringResource(R.string.check_manually))
         }
 
         Spacer(
@@ -616,6 +675,212 @@ fun ScannerScreen(
         )
     }
 }
+
+    @Composable
+    fun ProductListScreen(
+        repository: ProductRepository,
+        onBackClick: () -> Unit
+    ) {
+        val context = LocalContext.current
+        var products by remember { mutableStateOf<List<Product>>(emptyList()) }
+
+        LaunchedEffect(Unit) {
+            products = repository.getAllProducts()
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onBackClick) { Text("← Назад") }
+
+                Button(onClick = { exportProductsToCsv(context, products) }) {
+                    Text("Экспорт (CSV)")
+                }
+            }
+
+            Text(
+                text = "База товаров (${products.size})",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+
+            LazyColumn {
+                items(products) { product ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(text = product.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(text = "Склад: ${product.warehouseIndex} | Производитель: ${product.manufacturerIndex}")
+                            Text(text = "Префикс штрихкода: ${product.barcodePrefix}", fontSize = 12.sp, color = Color.Gray)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+@Composable
+fun HistoryScreen(
+    sessions: List<SavedSession>,
+    onBackClick: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
+
+    // Состояние для хранения выбранной сессии (если null, то показываем список сессий)
+    var selectedSession by remember { mutableStateOf<SavedSession?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = {
+                    if (selectedSession != null) {
+                        selectedSession = null // Возвращаемся к списку сессий
+                    } else {
+                        onBackClick() // Возвращаемся на главный экран
+                    }
+                }
+            ) {
+                Text("← Назад")
+            }
+        }
+
+        Text(
+            text = if (selectedSession == null) "История сессий" else "Детали сессии",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
+        if (selectedSession == null) {
+            // ЭКРАН 1: Список всех сессий
+            if (sessions.isEmpty()) {
+                Text("История пока пуста", color = Color.Gray, modifier = Modifier.padding(top = 16.dp))
+            } else {
+                LazyColumn {
+                    items(sessions) { session ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            onClick = { selectedSession = session } // Клик по сессии открывает детали!
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = dateFormat.format(Date(session.timestamp)),
+                                            color = Color.Gray,
+                                            fontSize = 12.sp
+                                        )
+                                        Text(
+                                            text = "${session.count} шт.",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = "%.3f кг".format(session.totalWeightGrams / 1000.0),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 20.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Показываем краткий список товаров, вошедших в сессию
+                                val summaryText = session.records
+                                    .groupBy { it.productName }
+                                    .entries
+                                    .joinToString(", ") { "${it.key} (${it.value.size} шт.)" }
+
+                                Text(
+                                    text = summaryText,
+                                    fontSize = 13.sp,
+                                    color = Color.DarkGray,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // ЭКРАН 2: Детали конкретной сессии (список каждого добавленного веса и товара)
+            Text(
+                text = dateFormat.format(Date(selectedSession!!.timestamp)),
+                color = Color.Gray,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            LazyColumn {
+                items(selectedSession!!.records) { record ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = record.productName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Text(
+                                    text = "Склад: ${record.warehouseIndex} | Производитель: ${record.manufacturerIndex}",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Text(
+                                text = "%.3f кг".format(record.weightGrams / 1000.0),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun AddProductScreen(
     repository: ProductRepository,
@@ -1096,4 +1361,108 @@ fun createTrainingExample(
         barcode = cleanBarcode,
         weightKg = weight
     )
+}
+
+// Структура одной конкретной позиции в сессии
+data class ScanRecord(
+    val productName: String,
+    val warehouseIndex: String,
+    val manufacturerIndex: String,
+    val weightGrams: Long
+)
+
+// Обновленная структура сессии
+data class SavedSession(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val timestamp: Long = System.currentTimeMillis(),
+    val records: List<ScanRecord> // Список всех сканирований в этой сессии
+) {
+    val count: Int get() = records.size
+    val totalWeightGrams: Long get() = records.sumOf { it.weightGrams }
+}
+
+fun exportProductsToCsv(context: Context, products: List<Product>) {
+    val csvData = StringBuilder()
+    // Заголовки таблицы
+    csvData.append("Название;Индекс склада;Индекс производителя;Префикс\n")
+
+    products.forEach { p ->
+        csvData.append("${p.name};${p.warehouseIndex};${p.manufacturerIndex};${p.barcodePrefix}\n")
+    }
+
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/csv"
+        putExtra(Intent.EXTRA_SUBJECT, "Экспорт товаров WeightScan")
+        putExtra(Intent.EXTRA_TEXT, csvData.toString())
+    }
+
+    val shareIntent = Intent.createChooser(sendIntent, "Сохранить или отправить файл")
+    context.startActivity(shareIntent)
+}
+
+@Composable
+fun LanguageSelector() {
+
+    val currentLanguage =
+        AppCompatDelegate
+            .getApplicationLocales()
+            .get(0)
+            ?.language
+            ?: "ru"
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+
+        TextButton(
+            onClick = {
+                AppCompatDelegate.setApplicationLocales(
+                    LocaleListCompat.forLanguageTags("ru")
+                )
+            }
+        ) {
+            Text(
+                text = "RU",
+                fontWeight =
+                    if (currentLanguage == "ru")
+                        FontWeight.Bold
+                    else
+                        FontWeight.Normal
+            )
+        }
+
+        TextButton(
+            onClick = {
+                AppCompatDelegate.setApplicationLocales(
+                    LocaleListCompat.forLanguageTags("uk")
+                )
+            }
+        ) {
+            Text(
+                text = "UA",
+                fontWeight =
+                    if (currentLanguage == "uk")
+                        FontWeight.Bold
+                    else
+                        FontWeight.Normal
+            )
+        }
+
+        TextButton(
+            onClick = {
+                AppCompatDelegate.setApplicationLocales(
+                    LocaleListCompat.forLanguageTags("pl")
+                )
+            }
+        ) {
+            Text(
+                text = "PL",
+                fontWeight =
+                    if (currentLanguage == "pl")
+                        FontWeight.Bold
+                    else
+                        FontWeight.Normal
+            )
+        }
+    }
 }

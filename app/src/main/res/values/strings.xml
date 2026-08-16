@@ -1,3 +1,70 @@
 <resources>
-    <string name="app_name">WarehouseWeightScanner</string>
+
+    <string name="app_name">WeightScan</string>
+
+    <string name="loading">Загрузка...</string>
+
+    <string name="product_not_found">Товар не найден</string>
+    <string name="invalid_barcode">Некорректный штрихкод</string>
+
+    <string name="current_session">Текущая сессия</string>
+    <string name="session_summary">%1$d шт. | %2$.3f кг</string>
+
+    <string name="undo">↶ Отменить</string>
+    <string name="reset">Сбросить</string>
+
+    <string name="warehouse_index">Индекс склада: %1$s</string>
+    <string name="manufacturer_index">Индекс производителя: %1$s</string>
+
+    <string name="products">База товаров</string>
+    <string name="history">История</string>
+    <string name="add_product">+ Добавить товар</string>
+
+    <string name="manual_input">Ручной ввод</string>
+    <string name="barcode">Штрихкод</string>
+    <string name="check_manually">Проверить вручную</string>
+
+    <string name="back">← Назад</string>
+    <string name="export_csv">Экспорт (CSV)</string>
+    <string name="products_count">База товаров (%1$d)</string>
+    <string name="product_indices">Склад: %1$s | Производитель: %2$s</string>
+    <string name="barcode_prefix">Префикс штрихкода: %1$s</string>
+
+    <string name="session_history">История сессий</string>
+    <string name="session_details">Детали сессии</string>
+    <string name="history_empty">История пока пуста</string>
+    <string name="items_count">%1$d шт.</string>
+    <string name="weight_format">%1$.3f кг</string>
+
+    <string name="new_product">Новый товар</string>
+    <string name="product_name">Название товара</string>
+    <string name="warehouse_index_field">Индекс склада</string>
+    <string name="manufacturer_index_field">Индекс производителя</string>
+
+    <string name="example_1">Пример №1</string>
+    <string name="example_2">Пример №2</string>
+    <string name="example_3">Пример №3 (необязательно)</string>
+
+    <string name="fill_product_data">Заполни название и оба индекса</string>
+    <string name="check_first_examples">Проверь первые два штрихкода и веса</string>
+    <string name="third_example_invalid">Третий пример заполнен неправильно</string>
+    <string name="rule_not_found">Не удалось определить правило. Попробуй добавить третий пример.</string>
+
+    <string name="detect_rule">Определить правило</string>
+    <string name="rule_found">Правило найдено ✓</string>
+    <string name="prefix">Префикс: %1$s</string>
+    <string name="weight_positions">Вес: позиции %1$d–%2$d</string>
+    <string name="divisor">Делитель: %1$d</string>
+
+    <string name="product_exists">Товар с таким префиксом уже существует</string>
+    <string name="product_saved">Товар сохранён ✓ Теперь нажми «Назад» и проверь его.</string>
+    <string name="save_product">Сохранить товар</string>
+
+    <string name="weight_kg">Вес, кг</string>
+
+    <string name="camera_permission">Для сканирования нужен доступ к камере</string>
+    <string name="allow_camera">Разрешить камеру</string>
+    <string name="torch_on">🔦 Вкл</string>
+    <string name="torch_off">🔦 Выкл</string>
+
 </resources>

@@ -34,9 +34,14 @@ android {
     buildFeatures {
         compose = true
     }
+    androidResources {
+        generateLocaleConfig = true
+    }
 }
 
 dependencies {
+    implementation(libs.androidx.appcompat)
+
     implementation(libs.androidx.camera.mlkit.vision)
 
     implementation(platform(libs.androidx.compose.bom))

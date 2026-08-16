@@ -1,5 +1,6 @@
 package com.weightscan.app.scanner
 
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult

@@ -12,8 +12,11 @@ room = "2.8.4"
 ksp = "2.3.11"
 camerax = "1.6.1"
 mlKitBarcode = "17.3.0"
+appcompat = "1.7.1"
 
 [libraries]
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
+
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
